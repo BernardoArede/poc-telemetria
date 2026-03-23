@@ -5,25 +5,24 @@ receivers:
       grpc:
 
 exporters:
-  loki:
-    endpoint: "http://loki:3100/loki/api/v1/push"
-    default_labels_enabled:
-      exporter: true
-      job: true
+  # O NOVO EXPORTADOR MÁGICO PARA O HYPERDX
+  otlphttp/hdx:
+    endpoint: 'https://in-otel.hyperdx.io'
+    headers:
+      authorization: 'aee98fd1-7a62-4297-bc73-85a22f40e337' # <-- Substitui pela tua chave!
+    compression: gzip
   
-  otlp/jaeger:
-    endpoint: "jaeger:4317"
-    tls:
-      insecure: true
-      
   debug:
     verbosity: detailed
 
 service:
   pipelines:
-    logs:
-      receivers: [otlp]
-      exporters: [loki, debug] 
     traces:
       receivers: [otlp]
-      exporters: [otlp/jaeger, debug]
+      exporters: [otlphttp/hdx, debug] 
+    logs:
+      receivers: [otlp]
+      exporters: [otlphttp/hdx, debug] 
+    metrics:
+      receivers: [otlp]
+      exporters: [otlphttp/hdx, debug] 
