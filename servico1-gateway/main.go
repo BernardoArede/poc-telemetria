@@ -127,7 +127,7 @@ func main() {
 
 	meterProvider, _ := initMetrics(res)
 	meter := meterProvider.Meter("servico1-gateway-meter")
-	contadorPedidos, _ = meter.Int64Counter("pedidos_total")
+	contadorPedidos, _ = meter.Int64Counter("pedidos_total") 
 
 	lp, _ := initLogger(res)
 	defer lp.Shutdown(context.Background())

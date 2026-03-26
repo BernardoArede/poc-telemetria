@@ -1,0 +1,90 @@
+\documentclass[a4paper,12pt,oneside]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage[myheadings]{fullpage}
+\DeclareUnicodeCharacter{0301}{\hspace{-1ex}\'{ }}
+
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{graphicx, wrapfig, subcaption, setspace, booktabs}
+\usepackage[font=small, labelfont=bf]{caption}
+\usepackage{fourier}
+\usepackage[protrusion=true, expansion=true]{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{float}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\usepackage{biblatex} 
+\addbibresource{references.bib}
+
+\usepackage{csquotes}
+
+\newcommand{\HRule}[1]{\rule{\linewidth}{#1}}
+\onehalfspacing
+\setcounter{tocdepth}{5}
+\setcounter{secnumdepth}{5}
+
+\usepackage[a4paper,top=2cm,bottom=1.5cm,left=2cm,right=2cm,marginparwidth=1.5cm]{geometry}
+
+\pagestyle{fancy}
+\fancyhf{}
+\setlength\headheight{15pt} 
+\fancyhead[L]{2022138769} 
+\fancyhead[R]{Bernardo Arede}
+\fancyfoot[R]{\thepage}
+
+\begin{document}
+
+\title{ \normalsize COIMBRA INSTITUTE OF ENGINEERING \\ [1.0cm]
+        \includegraphics[width=40mm]{img/isec.png} \\[.5cm] 
+        and \\[.5cm]
+        \includegraphics[width=50mm]{img/altice_labs_logo.png}\\[.5cm]
+        \normalsize Altice Labs \\ [1.0cm]
+        Departamento de Engenharia Informática e de Sistemas\\
+            \small Licenciatura em Engenharia Informática\\
+        \HRule{2pt} \\
+        \LARGE \textbf{Exploração do OpenTelemetry e Implementação de uma Prova de Conceito} 
+        \HRule{2pt} \\ [0.5cm]
+        }
+
+\author{
+        Relatório de Progresso Quinzenal \\[0.5cm]
+        Bernardo Arede 2022138769 \\[1cm]
+         Orientadores: \\
+         Ricardo Filipe, Altice Labs  \\ 
+         Ana Alves, ISEC 
+         }
+         \vspace{3cm}
+
+\maketitle
+\thispagestyle{empty} 
+\clearpage
+
+\pagenumbering{arabic} 
+
+\section{Evolução da Prova de Conceito (2ª Quinzena)}
+
+Nesta segunda fase do estágio, o foco recaiu sobre o aprimoramento da Prova de Conceito (PoC) inicial, a validação de cenários reais de falha e a evolução arquitetural para tecnologias mais robustas e orientadas a ambientes Cloud e assíncronos, conforme os requisitos debatidos com a Altice Labs.
+
+\subsection{Consolidação do 3º Pilar: Logging e Correlação}
+Para fechar o triângulo da observabilidade, integrou-se a biblioteca \textit{otelslog} nos microserviços em Golang. Esta integração permitiu que os \textit{logs} nativos da aplicação passassem a herdar automaticamente o contexto da execução, injetando o \textit{TraceID} em cada registo. Esta correlação é vital para reduzir o \textit{Mean Time To Resolution} (MTTR), permitindo à equipa de operações cruzar um erro nos \textit{logs} diretamente com a respetiva árvore de execução no \textit{tracing}.
+
+\subsection{Engenharia do Caos e Injeção de Anomalias}
+Para validar a eficácia da ferramenta, implementou-se um cenário de \textit{Chaos Engineering}. Injetou-se uma taxa de falha controlada (30\%) no serviço Orquestrador (retornando HTTP 500). Isto permitiu comprovar que o OpenTelemetry Collector captura e sinaliza corretamente os \textit{spans} de erro, propagando o estado de falha até ao \textit{Gateway} e registando o evento de forma visual nas ferramentas de análise, simulando o comportamento do sistema sob stress.
+
+\subsection{Otimização de Roteamento na Camada de Aplicação}
+De forma a preparar a aplicação para um contexto produtivo, o \textit{router} HTTP nativo do Go foi substituído pelo \textit{package} \textbf{go-chi}. Sendo um \textit{router} idiomático e de alta performance, o \textit{chi} facilita a organização de rotas (ex.: \textit{/api/v1/}) e prepara a arquitetura para a futura injeção de \textit{middlewares} globais, mantendo total compatibilidade com a biblioteca \textit{net/http}.
+
+\subsection{Unificação de \textit{Backends}: Transição para HyperDX e ClickHouse}
+Demonstrando o poder da neutralidade de fornecedor (\textit{vendor-neutrality}) proporcionada pelo OpenTelemetry, alterou-se o paradigma de armazenamento. As instâncias locais e fragmentadas (Jaeger, Loki, Prometheus e Grafana) foram substituídas por uma exportação direta via protocolo OTLP para o \textbf{HyperDX}, uma plataforma \textit{Cloud} centralizada.
+Suportado pelo motor de base de dados colunar \textbf{ClickHouse}, o HyperDX unificou as métricas, \textit{logs} e \textit{traces} num único painel de controlo (\textit{Single Pane of Glass}), cruzando dados em tempo real. Esta migração arquitetural foi realizada alterando apenas a configuração do \textit{OpenTelemetry Collector}, sem necessidade de modificar qualquer linha de código na lógica de negócio das aplicações.
+
+\subsection{Trabalho Futuro: Arquiteturas Assíncronas com NATS e Protobuf}
+De acordo com as novas diretrizes da orientação da Altice Labs, iniciou-se o estudo para a transição do modelo síncrono (HTTP) para um paradigma assíncrono e orientado a eventos. A próxima fase visará a introdução do \textbf{NATS} como \textit{Message Broker} e a utilização de \textbf{Protocol Buffers (Protobuf)} para serialização binária, substituindo o formato JSON. 
+O principal desafio arquitetural em análise será garantir a correta propagação do contexto de observabilidade (\textit{TraceID}) através das mensagens binárias no NATS, assegurando que o rastreio distribuído não é interrompido entre os serviços produtores e consumidores.
+
+\printbibliography
+
+\end{document}
