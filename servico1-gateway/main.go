@@ -25,6 +25,8 @@ import (
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 
 	"go.opentelemetry.io/otel/codes"
+
+	"github.com/go-chi/chi/v5"
 )
 
 
@@ -124,9 +126,8 @@ func main() {
 	defer tp.Shutdown(context.Background())
 
 	meterProvider, _ := initMetrics(res)
-	
 	meter := meterProvider.Meter("servico1-gateway-meter")
-	contadorPedidos, _ = meter.Int64Counter("pedidos_total")
+	contadorPedidos, _ = meter.Int64Counter("pedidos_total") 
 
 	lp, _ := initLogger(res)
 	defer lp.Shutdown(context.Background())
@@ -137,8 +138,15 @@ func main() {
 		http.ListenAndServe(":2222", mux)
 	}()
 
-	http.HandleFunc("/processarEntrada", processHandler)
+	r := chi.NewRouter()
 
-	fmt.Println("Micro-Serviço 1 a arrancar na porta 8000...")
-	log.Fatal(http.ListenAndServe(":8000", nil))
+	// Vantagem do Chi: Podemos agrupar rotas de forma limpa.
+	// E mais tarde podemos adicionar middlewares aqui (ex: r.Use(MeuMiddlewareOtel))
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/processarEntrada", processHandler)
+	})
+
+	fmt.Println("Micro-Serviço 1 (com go-chi) a arrancar na porta 8000...")
+	
+	log.Fatal(http.ListenAndServe(":8000", r))
 }
