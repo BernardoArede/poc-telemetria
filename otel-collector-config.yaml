@@ -1,7 +1,5 @@
 
 receivers:
-  # 1. A PORTA DE ENTRADA
-  # Recebe TODA a telemetria (Logs, Traces, Métricas) vinda dos teus micro-serviços em Go
   otlp:
     protocols:
       grpc:
@@ -17,20 +15,15 @@ exporters:
   # 2A. O DESTINO DOS LOGS (Infraestrutura Legacy / Grafana)
   loki:
     endpoint: "http://loki:3100/loki/api/v1/push"
-    # Nota: Assumo que tens um contentor 'loki' a correr no teu Docker na porta 3100
-
-  # 2B. O DESTINO DOS TRACES E MÉTRICAS (A Nuvem do HyperDX)
   otlp/hyperdx:
-    endpoint: "in-otel.hyperdx.io:4317" # Endpoint oficial do HyperDX
+    endpoint: "in-otel.hyperdx.io:4317" 
     tls:
       insecure: false
     headers:
-      # Substitui pela API Key que o HyperDX te deu quando criaste a conta
       authorization: "aee98fd1-7a62-4297-bc73-85a22f40e337" 
 
 service:
-  # 3. O POLÍCIA DE TRÂNSITO (Pipelines)
-  # É aqui que tu dizes o que vai para onde!
+ 
   pipelines:
     
     # Rota dos Traces: Entram pelo OTLP -> Vão para o HyperDX
