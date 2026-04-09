@@ -8,85 +8,67 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-	"go.opentelemetry.io/otel/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/otel/log/global"
 )
 
-// Variável global para o nosso Tracer
-var tracer trace.Tracer
-
-// initTracer liga este serviço ao Otel Collector no Docker
-func initTracer() (*sdktrace.TracerProvider, error) {
+func initTelemetry() (*sdktrace.TracerProvider, *sdklog.LoggerProvider, error) {
 	ctx := context.Background()
 
-	// Configurar o exportador GRPC para falar com o Collector na porta 4317
-	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint("localhost:4317"))
-	if err != nil {
-		return nil, err
-	}
-
-	// Definir o nome do serviço para aparecer bonitinho no HyperDX
-	res, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceName("Serviço 4 - Auditoria Altice"),
+	res, _ := resource.New(ctx, resource.WithAttributes(
+		semconv.ServiceName("servico3-auditoria"), 
 	))
-	if err != nil {
-		return nil, err
-	}
 
-	// Criar o Provider
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(res),
-	)
 
-	// Definir o propagador standard (Isto é OBRIGATÓRIO para extrair os IDs dos cabeçalhos!)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	traceExporter, _ := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint("localhost:4317"))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(res))
 	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 
-	return tp, nil
+	logExporter, _ := otlploggrpc.New(ctx, otlploggrpc.WithInsecure(), otlploggrpc.WithEndpoint("localhost:4317"))
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewBatchProcessor(logExporter)), sdklog.WithResource(res))
+	global.SetLoggerProvider(lp)
+
+	return tp, lp, nil
 }
 
 func main() {
-	// 1. Inicializar a Observabilidade
-	tp, err := initTracer()
+	tp, lp, err := initTelemetry()
 	if err != nil {
-		log.Fatal("Erro a inicializar o Tracer:", err)
+		log.Fatal("Erro a iniciar telemetria:", err)
 	}
-	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Fatal("Erro a desligar o Tracer:", err)
-		}
-	}()
+	defer tp.Shutdown(context.Background())
+	defer lp.Shutdown(context.Background())
 
-	// Dar nome ao Tracer
-	tracer = tp.Tracer("auditoria-tracer")
+	tracer := otel.Tracer("servico3-auditoria-tracer")
+	logger := otelslog.NewLogger("auditoria-logger")
 
-	// 2. Definir a rota HTTP que os Workers vão chamar
 	http.HandleFunc("/api/v1/auditoria", func(w http.ResponseWriter, r *http.Request) {
 		
-		// 🌟 A MAGIA ACONTECE AQUI 🌟
-		// Vamos aos cabeçalhos HTTP (r.Header) e extraímos o TraceID que o Worker Alpha/Beta enviou
 		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
-		// Iniciamos o Span passando esse "ctx" (contexto). O HyperDX vai ligar os pontos automaticamente!
-		ctx, span := tracer.Start(ctx, "Gravar Resolução do Alarme (Serviço 4)")
+		_, span := tracer.Start(ctx, "Gravar Registo na Base de Dados")
 		defer span.End()
 
-		// Simulamos o trabalho deste serviço (escrever numa base de dados central)
-		fmt.Println("🗄️ [AUDITORIA] Recebi pedido do Worker! A gravar resolução no sistema central...")
+		logger.Info("🗄️ Pedido de auditoria recebido! A gravar resolução no sistema central...")
+		
 		time.Sleep(500 * time.Millisecond) // Simula atraso da Base de Dados
-		fmt.Println("✅ [AUDITORIA] Ticket fechado com sucesso na Base de Dados!")
+		
+		logger.Info("✅ Tarefa fechada com sucesso na Base de Dados!")
 
-		// Responder ao Worker que correu tudo bem
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Auditoria registada com sucesso"))
 	})
 
-	// 3. Arrancar o Servidor HTTP
-	fmt.Println("Serviço 4 (Auditoria) a correr na porta 8001...")
+	fmt.Println("Serviço 3 (Auditoria) a correr na porta 8001...")
 	log.Fatal(http.ListenAndServe(":8001", nil))
 }

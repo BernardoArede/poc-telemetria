@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "./;pb";
+
+// Uma tarefa genérica para ser processada de forma assíncrona
+message Tarefa {
+  string id_tarefa = 1;      // Identificador único (ex: "JOB-123")
+  string tipo_acao = 2;      // O que é para fazer (ex: "GERAR_RELATORIO", "CALCULAR_DADOS")
+  string payload = 3;        // A informação necessária (pode ser uma string genérica ou JSON)
+  int64 timestamp = 4;       // Momento em que foi criada
+}

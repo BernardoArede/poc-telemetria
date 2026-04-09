@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time" 
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -87,11 +88,11 @@ func initMetrics(res *resource.Resource) (*sdkmetric.MeterProvider, error) {
 }
 
 func processHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. O OpenTelemetry cria um Span (Início do Trace)
-	ctx, span := tracer.Start(r.Context(), "Receber Alarme HTTP")
+	contadorPedidos.Add(r.Context(), 1)
+
+	ctx, span := tracer.Start(r.Context(), "Receber Tarefa HTTP")
 	defer span.End()
 
-	// 2. Conectar ao NATS (Na vida real isto faz-se no main, mas aqui é para a PoC)
 	nc, err := nats.Connect("nats://localhost:4222")
 	if err != nil {
 		http.Error(w, "Erro ao ligar ao NATS", http.StatusInternalServerError)
@@ -99,39 +100,34 @@ func processHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer nc.Close()
 
-	// 3. Criar a nossa mensagem Protobuf (O Alarme da Altice)
-	alarme := &pb.AlarmeRede{
-		IdAlarme:        "ALM-999",
-		EquipamentoIp:   "10.64.2.115",
-		TipoEquipamento: "Antena-5G",
-		NivelSeveridade: 5, // Crítico!
-		DescricaoFalha:  "Perda de sinal ótico (LOS) devido a tempestade",
+	tarefa := &pb.Tarefa{
+		IdTarefa:  fmt.Sprintf("JOB-%d", time.Now().Unix()), 
+		TipoAcao:  "GERAR_RELATORIO",
+		Payload:   "dados_do_utilizador=12345;formato=pdf",
+		Timestamp: time.Now().Unix(),
 	}
 
-	// 4. Compactar para Binário (Marshal)
-	dadosBinarios, _ := proto.Marshal(alarme)
+	dadosBinarios, err := proto.Marshal(tarefa)
+	if err != nil {
+		http.Error(w, "Erro a empacotar dados Protobuf", http.StatusInternalServerError)
+		return
+	}
 
-	// 5. Preparar a mensagem NATS
 	msg := &nats.Msg{
-		Subject: "ALARMES.rede",
+		Subject: "TAREFAS.processamento",
 		Data:    dadosBinarios,
-		Header:  make(nats.Header), // Inicializar os cabeçalhos do NATS
+		Header:  make(nats.Header), 
 	}
 
-	// 6. O GOLPE DE MESTRE: Injetar o TraceID do OpenTelemetry nos Cabeçalhos do NATS
-	// Usamos o propagador standard do Otel. Como o nats.Header é idêntico ao http.Header por baixo, fazemos um "cast"
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(http.Header(msg.Header)))
 
-	// 7. Publicar no NATS
 	err = nc.PublishMsg(msg)
 	if err != nil {
 		http.Error(w, "Erro ao publicar no NATS", http.StatusInternalServerError)
 		return
 	}
-
-	// 8. Responder ao utilizador
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("Alarme recebido e enviado para processamento assíncrono!"))
+	w.Write([]byte("Tarefa submetida com sucesso para processamento assincrono!"))
 }
 
 func main() {
@@ -158,13 +154,11 @@ func main() {
 
 	r := chi.NewRouter()
 
-	// Vantagem do Chi: Podemos agrupar rotas de forma limpa.
-	// E mais tarde podemos adicionar middlewares aqui (ex: r.Use(MeuMiddlewareOtel))
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/processarEntrada", processHandler)
 	})
 
-	fmt.Println("Micro-Serviço 1 (com go-chi) a arrancar na porta 8000...")
+	fmt.Println("Micro-Serviço 1 (Gateway) a arrancar na porta 8000...")
 
 	log.Fatal(http.ListenAndServe(":8000", r))
 }
