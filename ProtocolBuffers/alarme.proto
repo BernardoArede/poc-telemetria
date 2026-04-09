@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "./;pb";
+
+message AlarmeRede {
+  string id_alarme = 1;
+  string equipamento_ip = 2;
+  string tipo_equipamento = 3;
+  int32 nivel_severidade = 4;
+  string descricao_falha = 5;      
+}

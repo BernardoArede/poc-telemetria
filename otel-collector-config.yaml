@@ -1,28 +1,45 @@
+
 receivers:
   otlp:
     protocols:
-      http:
       grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Junta os dados em pequenos lotes antes de enviar, para não sobrecarregar a rede
+  batch:
 
 exporters:
-  # O NOVO EXPORTADOR MÁGICO PARA O HYPERDX
-  otlphttp/hdx:
-    endpoint: 'https://in-otel.hyperdx.io'
+  # 2A. O DESTINO DOS LOGS (Infraestrutura Legacy / Grafana)
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+  otlp/hyperdx:
+    endpoint: "in-otel.hyperdx.io:4317" 
+    tls:
+      insecure: false
     headers:
-      authorization: 'aee98fd1-7a62-4297-bc73-85a22f40e337' # <-- Substitui pela tua chave!
-    compression: gzip
-  
-  debug:
-    verbosity: detailed
+      authorization: "aee98fd1-7a62-4297-bc73-85a22f40e337" 
 
 service:
+ 
   pipelines:
+    
+    # Rota dos Traces: Entram pelo OTLP -> Vão para o HyperDX
     traces:
       receivers: [otlp]
-      exporters: [otlphttp/hdx, debug] 
-    logs:
-      receivers: [otlp]
-      exporters: [otlphttp/hdx, debug] 
+      processors: [batch]
+      exporters: [otlp/hyperdx]
+      
+    # Rota das Métricas: Entram pelo OTLP -> Vão para o HyperDX
     metrics:
       receivers: [otlp]
-      exporters: [otlphttp/hdx, debug] 
+      processors: [batch]
+      exporters: [otlp/hyperdx]
+
+    # Rota dos Logs: Entram pelo OTLP -> Vão para o Loki (Grafana)
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [loki]
