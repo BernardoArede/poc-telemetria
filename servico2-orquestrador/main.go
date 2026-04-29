@@ -12,45 +12,17 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"google.golang.org/protobuf/proto"
 
-	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	sdklog "go.opentelemetry.io/otel/sdk/log"
-
-	"go.opentelemetry.io/contrib/bridges/otelslog"
-	"go.opentelemetry.io/otel/log/global"
-
-	pb "poc-telemetria/ProtocolBuffers"
-
 	"github.com/nats-io/nats.go"
+
+	telemetria "altice-openTelemetry"
+	pb "poc-telemetria/ProtocolBuffers"
 )
 
-func initTelemetry() (*sdktrace.TracerProvider, *sdklog.LoggerProvider, error) {
-	ctx := context.Background()
-
-	res, _ := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceName("servico2-worker"), // Nome genérico
-	))
-
-	traceExporter, _ := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint("localhost:4317"))
-	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(res))
-	otel.SetTracerProvider(tp)
-	
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	logExporter, _ := otlploggrpc.New(ctx, otlploggrpc.WithInsecure(), otlploggrpc.WithEndpoint("localhost:4317"))
-	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewBatchProcessor(logExporter)), sdklog.WithResource(res))
-	global.SetLoggerProvider(lp)
-
-	return tp, lp, nil
-}
-
 func main() {
-	tp, lp, err := initTelemetry()
+	tp, lp, err := telemetria.InitConfig("servico2-worker", "localhost:4317")
 	if err != nil {
 		log.Fatal("Erro a iniciar telemetria:", err)
 	}
@@ -68,15 +40,14 @@ func main() {
 
 	logger.Info("Worker Iniciado e à escuta de Tarefas Genéricas...")
 
-	_, err = nc.QueueSubscribe("TAREFAS.processamento", "grupo-workers", func(msg *nats.Msg) {
-		
-		ctx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.HeaderCarrier(http.Header(msg.Header)))
+	_, err = telemetria.SubscribeWithTrace(nc, "TAREFAS.processamento", "grupo-workers", func(ctx context.Context, msg *nats.Msg) {
 
 		nomeDoWorker := fmt.Sprintf("Worker-PID-%d", os.Getpid())
 
 		ctx, span := tracer.Start(ctx, "Executar Tarefa (Worker)")
 		defer span.End()
 		span.SetAttributes(attribute.String("worker.id", nomeDoWorker))
+
 		var tarefa pb.Tarefa
 		err := proto.Unmarshal(msg.Data, &tarefa)
 		if err != nil {
@@ -98,8 +69,9 @@ func main() {
 
 		time.Sleep(2 * time.Second)
 		logger.Info("Tarefa processada com sucesso!", slog.String("id_tarefa", tarefa.IdTarefa))
+
 		req, _ := http.NewRequestWithContext(ctx, "POST", "http://localhost:8001/api/v1/auditoria", nil)
-		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header)) // Injeta contexto HTTP
+		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 		client := &http.Client{}
 		resp, err := client.Do(req)

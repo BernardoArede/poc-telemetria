@@ -1,19 +1,16 @@
-module servico2-orquestrador
+module servico3-auditoria
 
 go 1.25.0
 
+replace altice-openTelemetry => ../altice-openTelemetry
+
 require (
-	github.com/nats-io/nats.go v1.51.0
+	altice-openTelemetry v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/contrib/bridges/otelslog v0.18.0
 	go.opentelemetry.io/otel v1.43.0
-	google.golang.org/protobuf v1.36.11
-	poc-telemetria v0.0.0
 )
 
-replace poc-telemetria => ../
-
 require (
-	altice-openTelemetry v0.0.0-00010101000000-000000000000 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -21,6 +18,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/nats-io/nats.go v1.51.0 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -40,6 +38,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace altice-openTelemetry => ../altice-openTelemetry
